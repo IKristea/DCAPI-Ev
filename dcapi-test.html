@@ -2,84 +2,101 @@
 <html>
 
 <head>
-    <title>DCAPI Test FINAL</title>
+    <title>DCAPI - CBOR DeviceRequest</title>
+    <script src="https://cdn.jsdelivr.net/npm/cbor-x@1.5.9/dist/index.min.js"></script>
 </head>
 
 <body style="font-family: sans-serif; padding: 20px">
-    <h1>DCAPI - requests + data + org-iso-mdoc</h1>
-    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">A: selector format</button>
-    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">B: nameSpaces format</button>
-    <button id="b3" style="padding:15px;display:block;margin:10px 0;font-size:16px">C: minimal docType</button>
+    <h1>DCAPI - ISO 18013-7 CBOR</h1>
+    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">A: CBOR DeviceRequest</button>
+    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">B: JSON deviceRequest</button>
     <pre id="r" style="background:#eee;padding:10px;white-space:pre-wrap;word-wrap:break-word"></pre>
     <script>
         const log = m => document.getElementById('r').textContent = m;                                                                                                                                                                     
-      const run = async (label, opts) => {                                                                                                                                                                                             
-        log(`Trying ${label}...`);                                                                                                                                                                                                       
-        try {                                                                                                                                                                                                                          
-          const c = await navigator.credentials.get(opts);
-          log(`SUCCESS ${label}:\n` + JSON.stringify(c, null, 2));                                                                                                                                                                       
+                                                                                                                                                                                                                                         
+      function bytesToBase64url(bytes) {                                                                                                                                                                                                 
+        let bin = '';
+        for (const b of bytes) bin += String.fromCharCode(b);                                                                                                                                                                            
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');                                                                                                                                                   
+      }                                                                                                                                                                                                                                  
+   
+      document.getElementById('b1').onclick = async () => {                                                                                                                                                                              
+        log('Building CBOR DeviceRequest...');                                                                                                                                                                                         
+        try {                                                                                                                                                                                                                            
+          const encoder = new CBOR.Encoder({ tagUint8Array: false, useRecords: false });                                                                                                                                               
+                                                                                                                                                                                                                                         
+          const itemsRequest = {
+            docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                          
+            nameSpaces: {                                                                                                                                                                                                              
+              "eu.europa.ec.eudi.pid.1": {
+                "given_name": false,                                                                                                                                                                                                     
+                "family_name": false,
+                "birth_date": false                                                                                                                                                                                                      
+              }                                                                                                                                                                                                                        
+            }
+          };
+
+          const itemsRequestBytes = encoder.encode(itemsRequest);                                                                                                                                                                        
+   
+          const deviceRequest = {                                                                                                                                                                                                        
+            version: "1.0",                                                                                                                                                                                                            
+            docRequests: [{
+              itemsRequest: new CBOR.Tag(itemsRequestBytes, 24)
+            }]                                                                                                                                                                                                                           
+          };
+                                                                                                                                                                                                                                         
+          const deviceRequestBytes = encoder.encode(deviceRequest);                                                                                                                                                                    
+          const deviceRequestB64 = bytesToBase64url(new Uint8Array(deviceRequestBytes));
+                                                                                                                                                                                                                                         
+          log('Calling navigator.credentials.get with CBOR...');
+          const cred = await navigator.credentials.get({                                                                                                                                                                                 
+            digital: {                                                                                                                                                                                                                   
+              requests: [{
+                protocol: "org-iso-mdoc",                                                                                                                                                                                                
+                data: {                                                                                                                                                                                                                
+                  deviceRequest: deviceRequestB64,
+                  encryptionInfo: ""
+                }                                                                                                                                                                                                                        
+              }]
+            }                                                                                                                                                                                                                            
+          });                                                                                                                                                                                                                          
+          log('SUCCESS A:\n' + JSON.stringify(cred, null, 2));
         } catch (e) {
-          log(`ERROR ${label}:\n${e.name}: ${e.message}`);                                                                                                                                                                               
+          log('ERROR A:\n' + e.name + ': ' + e.message + '\n\n' + (e.stack || ''));
         }                                                                                                                                                                                                                                
       };
                                                                                                                                                                                                                                          
-      // A — selector format (Google matcher)                                                                                                                                                                                          
-      document.getElementById('b1').onclick = () => run('A', {
-        digital: {                                                                                                                                                                                                                       
-          requests: [{
-            protocol: "org-iso-mdoc",                                                                                                                                                                                                    
-            data: {                                                                                                                                                                                                                    
-              selector: {
-                format: ["mdoc"],
-                doctype: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                      
-                fields: [
-                  { namespace: "eu.europa.ec.eudi.pid.1", name: "given_name", intentToRetain: false },                                                                                                                                   
-                  { namespace: "eu.europa.ec.eudi.pid.1", name: "family_name", intentToRetain: false },                                                                                                                                  
-                  { namespace: "eu.europa.ec.eudi.pid.1", name: "birth_date", intentToRetain: false }
-                ]                                                                                                                                                                                                                        
-              },                                                                                                                                                                                                                       
-              nonce: "test-" + Date.now(),                                                                                                                                                                                               
-              readerPublicKey: ""                                                                                                                                                                                                      
-            }                                                                                                                                                                                                                            
-          }]
-        }                                                                                                                                                                                                                                
-      });                                                                                                                                                                                                                              
-
-      // B — docType + nameSpaces
-      document.getElementById('b2').onclick = () => run('B', {
-        digital: {
-          requests: [{
-            protocol: "org-iso-mdoc",
-            data: {
-              docType: "eu.europa.ec.eudi.pid.1",
-              nameSpaces: {
-                "eu.europa.ec.eudi.pid.1": {
-                  "given_name": false,                                                                                                                                                                                                   
-                  "family_name": false,
-                  "birth_date": false                                                                                                                                                                                                    
-                }                                                                                                                                                                                                                      
-              },
-              nonce: "test-" + Date.now()
+      document.getElementById('b2').onclick = async () => {                                                                                                                                                                            
+        log('Calling with JSON deviceRequest...');                                                                                                                                                                                       
+        try {                                                                                                                                                                                                                          
+          const cred = await navigator.credentials.get({
+            digital: {
+              requests: [{                                                                                                                                                                                                               
+                protocol: "org-iso-mdoc",
+                data: {                                                                                                                                                                                                                  
+                  deviceRequest: {                                                                                                                                                                                                     
+                    version: "1.0",
+                    docRequests: [{
+                      itemsRequest: {
+                        docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                              
+                        nameSpaces: {
+                          "eu.europa.ec.eudi.pid.1": {                                                                                                                                                                                   
+                            "given_name": false,                                                                                                                                                                                         
+                            "family_name": false
+                          }                                                                                                                                                                                                              
+                        }                                                                                                                                                                                                              
+                      }
+                    }]
+                  }
+                }
+              }]
             }
-          }]
-        }
-      });
-
-      // C — minimal
-      document.getElementById('b3').onclick = () => run('C', {
-        digital: {
-          requests: [{
-            protocol: "org-iso-mdoc",
-            data: {                                                                                                                                                                                                                      
-              doctype: "eu.europa.ec.eudi.pid.1",
-              fields: [                                                                                                                                                                                                                  
-                { namespace: "eu.europa.ec.eudi.pid.1", name: "given_name" },                                                                                                                                                          
-                { namespace: "eu.europa.ec.eudi.pid.1", name: "family_name" }                                                                                                                                                            
-              ]
-            }                                                                                                                                                                                                                            
-          }]                                                                                                                                                                                                                             
-        }
-      });                                                                                                                                                                                                                                
+          });
+          log('SUCCESS B:\n' + JSON.stringify(cred, null, 2));
+        } catch (e) {                                                                                                                                                                                                                    
+          log('ERROR B:\n' + e.name + ': ' + e.message);
+        }                                                                                                                                                                                                                                
+      };                                                                                                                                                                                                                               
     </script>
 </body>
 
