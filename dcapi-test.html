@@ -2,81 +2,84 @@
 <html>
 
 <head>
-    <title>DCAPI Test FIXED</title>
+    <title>DCAPI Test FINAL</title>
 </head>
 
 <body style="font-family: sans-serif; padding: 20px">
-    <h1>DCAPI Test - org-iso-mdoc</h1>
-    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">A: org-iso-mdoc + selector format</button>
-    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">B: org-iso-mdoc + deviceRequest</button>
-    <button id="b3" style="padding:15px;display:block;margin:10px 0;font-size:16px">C: org-iso-mdoc + nameSpaces</button>
+    <h1>DCAPI - requests + data + org-iso-mdoc</h1>
+    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">A: selector format</button>
+    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">B: nameSpaces format</button>
+    <button id="b3" style="padding:15px;display:block;margin:10px 0;font-size:16px">C: minimal docType</button>
     <pre id="r" style="background:#eee;padding:10px;white-space:pre-wrap;word-wrap:break-word"></pre>
     <script>
         const log = m => document.getElementById('r').textContent = m;                                                                                                                                                                     
-      const run = async (label, opts) => {                                                                                                                                                                                               
-        log(`Trying ${label}...`);
-        try {                                                                                                                                                                                                                            
-          const c = await navigator.credentials.get(opts);                                                                                                                                                                             
+      const run = async (label, opts) => {                                                                                                                                                                                             
+        log(`Trying ${label}...`);                                                                                                                                                                                                       
+        try {                                                                                                                                                                                                                          
+          const c = await navigator.credentials.get(opts);
           log(`SUCCESS ${label}:\n` + JSON.stringify(c, null, 2));                                                                                                                                                                       
-        } catch (e) {                                                                                                                                                                                                                    
-          log(`ERROR ${label}:\n${e.name}: ${e.message}`);
+        } catch (e) {
+          log(`ERROR ${label}:\n${e.name}: ${e.message}`);                                                                                                                                                                               
         }                                                                                                                                                                                                                                
-      };                                                                                                                                                                                                                               
-
-      // A — "selector" format (Google IdentityCredential matcher style)                                                                                                                                                                 
+      };
+                                                                                                                                                                                                                                         
+      // A — selector format (Google matcher)                                                                                                                                                                                          
       document.getElementById('b1').onclick = () => run('A', {
         digital: {                                                                                                                                                                                                                       
-          providers: [{                                                                                                                                                                                                                
+          requests: [{
             protocol: "org-iso-mdoc",                                                                                                                                                                                                    
-            request: {
-              selector: {                                                                                                                                                                                                                
-                format: ["mdoc"],                                                                                                                                                                                                      
-                doctype: "eu.europa.ec.eudi.pid.1",
-                fields: [                                                                                                                                                                                                                
-                  { namespace: "eu.europa.ec.eudi.pid.1", name: "given_name", intentToRetain: false },
+            data: {                                                                                                                                                                                                                    
+              selector: {
+                format: ["mdoc"],
+                doctype: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                      
+                fields: [
+                  { namespace: "eu.europa.ec.eudi.pid.1", name: "given_name", intentToRetain: false },                                                                                                                                   
                   { namespace: "eu.europa.ec.eudi.pid.1", name: "family_name", intentToRetain: false },                                                                                                                                  
-                  { namespace: "eu.europa.ec.eudi.pid.1", name: "birth_date", intentToRetain: false }                                                                                                                                    
+                  { namespace: "eu.europa.ec.eudi.pid.1", name: "birth_date", intentToRetain: false }
                 ]                                                                                                                                                                                                                        
-              },                                                                                                                                                                                                                         
-              nonce: "test-" + Date.now(),                                                                                                                                                                                             
-              readerPublicKey: ""                                                                                                                                                                                                        
-            }
-          }]                                                                                                                                                                                                                             
-        }                                                                                                                                                                                                                              
-      });
-
-      // B — deviceRequest (raw CBOR base64url - placeholder)                                                                                                                                                                            
-      document.getElementById('b2').onclick = () => run('B', {
-        digital: {                                                                                                                                                                                                                       
-          providers: [{                                                                                                                                                                                                                
-            protocol: "org-iso-mdoc",
-            request: {                                                                                                                                                                                                                   
-              deviceRequest: "",
-              encryptionInfo: ""                                                                                                                                                                                                         
-            }                                                                                                                                                                                                                          
-          }]
-        }
-      });
-
-      // C — nameSpaces format                                                                                                                                                                                                           
-      document.getElementById('b3').onclick = () => run('C', {
-        digital: {                                                                                                                                                                                                                       
-          providers: [{                                                                                                                                                                                                                
-            protocol: "org-iso-mdoc",
-            request: {
-              docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                        
-              nameSpaces: {
-                "eu.europa.ec.eudi.pid.1": {                                                                                                                                                                                             
-                  "given_name": false,                                                                                                                                                                                                 
-                  "family_name": false,                                                                                                                                                                                                  
-                  "birth_date": false
-                }                                                                                                                                                                                                                        
               },                                                                                                                                                                                                                       
+              nonce: "test-" + Date.now(),                                                                                                                                                                                               
+              readerPublicKey: ""                                                                                                                                                                                                      
+            }                                                                                                                                                                                                                            
+          }]
+        }                                                                                                                                                                                                                                
+      });                                                                                                                                                                                                                              
+
+      // B — docType + nameSpaces
+      document.getElementById('b2').onclick = () => run('B', {
+        digital: {
+          requests: [{
+            protocol: "org-iso-mdoc",
+            data: {
+              docType: "eu.europa.ec.eudi.pid.1",
+              nameSpaces: {
+                "eu.europa.ec.eudi.pid.1": {
+                  "given_name": false,                                                                                                                                                                                                   
+                  "family_name": false,
+                  "birth_date": false                                                                                                                                                                                                    
+                }                                                                                                                                                                                                                      
+              },
               nonce: "test-" + Date.now()
             }
           }]
         }
       });
+
+      // C — minimal
+      document.getElementById('b3').onclick = () => run('C', {
+        digital: {
+          requests: [{
+            protocol: "org-iso-mdoc",
+            data: {                                                                                                                                                                                                                      
+              doctype: "eu.europa.ec.eudi.pid.1",
+              fields: [                                                                                                                                                                                                                  
+                { namespace: "eu.europa.ec.eudi.pid.1", name: "given_name" },                                                                                                                                                          
+                { namespace: "eu.europa.ec.eudi.pid.1", name: "family_name" }                                                                                                                                                            
+              ]
+            }                                                                                                                                                                                                                            
+          }]                                                                                                                                                                                                                             
+        }
+      });                                                                                                                                                                                                                                
     </script>
 </body>
 
