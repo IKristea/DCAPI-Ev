@@ -1,0 +1,42 @@
+<!DOCTYPE html>                                                                                                                                                                                                                        
+  <html>                                                                                                                                                                                                                               
+  <head><title>DCAPI Test</title></head>
+  <body style="font-family: sans-serif; padding: 20px">
+    <h1>Test DCAPI pentru EVO</h1>                                                                                                                                                                                                       
+    <button id="btn" style="padding: 20px; font-size: 18px">Cere PID</button>
+    <pre id="result" style="white-space: pre-wrap; word-wrap: break-word"></pre>                                                                                                                                                         
+    <script>                                                                                                                                                                                                                             
+      document.getElementById('btn').onclick = async () => {                                                                                                                                                                             
+        const result = document.getElementById('result');                                                                                                                                                                                
+        try {                                                                                                                                                                                                                          
+          const cred = await navigator.credentials.get({                                                                                                                                                                                 
+            digital: {                                                                                                                                                                                                                 
+              providers: [{
+                protocol: "org.iso.mdoc",
+                request: {                                                                                                                                                                                                               
+                  deviceRequest: {
+                    docRequests: [{                                                                                                                                                                                                      
+                      itemsRequest: {                                                                                                                                                                                                  
+                        docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                              
+                        nameSpaces: {                                                                                                                                                                                                    
+                          "eu.europa.ec.eudi.pid.1": {
+                            "given_name": false,                                                                                                                                                                                         
+                            "family_name": false,                                                                                                                                                                                      
+                            "birth_date": false
+                          }                                                                                                                                                                                                              
+                        }
+                      }                                                                                                                                                                                                                  
+                    }]                                                                                                                                                                                                                 
+                  }
+                }
+              }]
+            }
+          });
+          result.textContent = "SUCCESS:\n" + JSON.stringify(cred, null, 2);
+        } catch (e) {                                                                                                                                                                                                                    
+          result.textContent = "ERROR: " + e.name + " - " + e.message;
+        }                                                                                                                                                                                                                                
+      };                                                                                                                                                                                                                               
+    </script>                                                                                                                                                                                                                            
+  </body>                                                                                                                                                                                                                              
+  </html>
