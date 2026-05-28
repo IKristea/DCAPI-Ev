@@ -2,101 +2,139 @@
 <html>
 
 <head>
-    <title>DCAPI - CBOR DeviceRequest</title>
+    <title>DCAPI - Multi docType</title>
     <script src="https://cdn.jsdelivr.net/npm/cbor-x@1.5.9/dist/index.min.js"></script>
 </head>
 
 <body style="font-family: sans-serif; padding: 20px">
-    <h1>DCAPI - ISO 18013-7 CBOR</h1>
-    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">A: CBOR DeviceRequest</button>
-    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">B: JSON deviceRequest</button>
+    <h1>DCAPI - test ambele docTypes</h1>
+    <h3>eu.europa.ec.eudi.pid.1</h3>
+    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">A1: EU PID + CBOR</button>
+    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">A2: EU PID + JSON</button>
+
+    <h3>md.gov.wallet.pid.1</h3>
+    <button id="b3" style="padding:15px;display:block;margin:10px 0;font-size:16px">B1: MD PID + CBOR</button>
+    <button id="b4" style="padding:15px;display:block;margin:10px 0;font-size:16px">B2: MD PID + JSON</button>
+
+    <h3>Ambele docTypes simultan</h3>
+    <button id="b5" style="padding:15px;display:block;margin:10px 0;font-size:16px">C: Both docTypes (CBOR)</button>
+
     <pre id="r" style="background:#eee;padding:10px;white-space:pre-wrap;word-wrap:break-word"></pre>
     <script>
         const log = m => document.getElementById('r').textContent = m;                                                                                                                                                                     
                                                                                                                                                                                                                                          
-      function bytesToBase64url(bytes) {                                                                                                                                                                                                 
-        let bin = '';
-        for (const b of bytes) bin += String.fromCharCode(b);                                                                                                                                                                            
-        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');                                                                                                                                                   
+      function bytesToB64url(bytes) {
+        let bin = '';                                                                                                                                                                                                                    
+        for (const b of bytes) bin += String.fromCharCode(b);                                                                                                                                                                          
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       }                                                                                                                                                                                                                                  
    
-      document.getElementById('b1').onclick = async () => {                                                                                                                                                                              
-        log('Building CBOR DeviceRequest...');                                                                                                                                                                                         
-        try {                                                                                                                                                                                                                            
-          const encoder = new CBOR.Encoder({ tagUint8Array: false, useRecords: false });                                                                                                                                               
-                                                                                                                                                                                                                                         
+      function buildCborDeviceRequest(docTypes) {                                                                                                                                                                                        
+        const encoder = new CBOR.Encoder({ tagUint8Array: false, useRecords: false });                                                                                                                                                 
+        const docRequests = docTypes.map(docType => {                                                                                                                                                                                    
           const itemsRequest = {
-            docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                          
+            docType,                                                                                                                                                                                                                     
             nameSpaces: {                                                                                                                                                                                                              
-              "eu.europa.ec.eudi.pid.1": {
-                "given_name": false,                                                                                                                                                                                                     
+              [docType]: {                                                                                                                                                                                                               
+                "given_name": false,                                                                                                                                                                                                   
                 "family_name": false,
-                "birth_date": false                                                                                                                                                                                                      
-              }                                                                                                                                                                                                                        
+                "birth_date": false
+              }
             }
           };
-
-          const itemsRequestBytes = encoder.encode(itemsRequest);                                                                                                                                                                        
-   
-          const deviceRequest = {                                                                                                                                                                                                        
+          const bytes = encoder.encode(itemsRequest);                                                                                                                                                                                    
+          return { itemsRequest: new CBOR.Tag(bytes, 24) };
+        });                                                                                                                                                                                                                              
+        const deviceRequest = { version: "1.0", docRequests };                                                                                                                                                                         
+        return bytesToB64url(new Uint8Array(encoder.encode(deviceRequest)));                                                                                                                                                             
+      }
+                                                                                                                                                                                                                                         
+      function buildJsonRequest(docType) {                                                                                                                                                                                               
+        return {
+          deviceRequest: {                                                                                                                                                                                                               
             version: "1.0",                                                                                                                                                                                                            
             docRequests: [{
-              itemsRequest: new CBOR.Tag(itemsRequestBytes, 24)
-            }]                                                                                                                                                                                                                           
-          };
-                                                                                                                                                                                                                                         
-          const deviceRequestBytes = encoder.encode(deviceRequest);                                                                                                                                                                    
-          const deviceRequestB64 = bytesToBase64url(new Uint8Array(deviceRequestBytes));
-                                                                                                                                                                                                                                         
-          log('Calling navigator.credentials.get with CBOR...');
-          const cred = await navigator.credentials.get({                                                                                                                                                                                 
-            digital: {                                                                                                                                                                                                                   
-              requests: [{
-                protocol: "org-iso-mdoc",                                                                                                                                                                                                
-                data: {                                                                                                                                                                                                                
-                  deviceRequest: deviceRequestB64,
-                  encryptionInfo: ""
-                }                                                                                                                                                                                                                        
-              }]
-            }                                                                                                                                                                                                                            
-          });                                                                                                                                                                                                                          
-          log('SUCCESS A:\n' + JSON.stringify(cred, null, 2));
-        } catch (e) {
-          log('ERROR A:\n' + e.name + ': ' + e.message + '\n\n' + (e.stack || ''));
-        }                                                                                                                                                                                                                                
-      };
-                                                                                                                                                                                                                                         
-      document.getElementById('b2').onclick = async () => {                                                                                                                                                                            
-        log('Calling with JSON deviceRequest...');                                                                                                                                                                                       
-        try {                                                                                                                                                                                                                          
-          const cred = await navigator.credentials.get({
-            digital: {
-              requests: [{                                                                                                                                                                                                               
-                protocol: "org-iso-mdoc",
-                data: {                                                                                                                                                                                                                  
-                  deviceRequest: {                                                                                                                                                                                                     
-                    version: "1.0",
-                    docRequests: [{
-                      itemsRequest: {
-                        docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                              
-                        nameSpaces: {
-                          "eu.europa.ec.eudi.pid.1": {                                                                                                                                                                                   
-                            "given_name": false,                                                                                                                                                                                         
-                            "family_name": false
-                          }                                                                                                                                                                                                              
-                        }                                                                                                                                                                                                              
-                      }
-                    }]
+              itemsRequest: {
+                docType,
+                nameSpaces: {                                                                                                                                                                                                            
+                  [docType]: {
+                    "given_name": false,                                                                                                                                                                                                 
+                    "family_name": false,                                                                                                                                                                                              
+                    "birth_date": false
                   }
                 }
-              }]
-            }
-          });
-          log('SUCCESS B:\n' + JSON.stringify(cred, null, 2));
+              }
+            }]
+          }
+        };                                                                                                                                                                                                                               
+      }
+                                                                                                                                                                                                                                         
+      const run = async (label, opts) => {                                                                                                                                                                                             
+        log(`Trying ${label}...`);
+        try {
+          const cred = await navigator.credentials.get(opts);
+          log(`SUCCESS ${label}:\n` + JSON.stringify(cred, null, 2));
         } catch (e) {                                                                                                                                                                                                                    
-          log('ERROR B:\n' + e.name + ': ' + e.message);
+          log(`ERROR ${label}:\n${e.name}: ${e.message}`);
         }                                                                                                                                                                                                                                
       };                                                                                                                                                                                                                               
+                                                                                                                                                                                                                                         
+      document.getElementById('b1').onclick = () => run('A1', {                                                                                                                                                                        
+        digital: {
+          requests: [{
+            protocol: "org-iso-mdoc",
+            data: {                                                                                                                                                                                                                      
+              deviceRequest: buildCborDeviceRequest(["eu.europa.ec.eudi.pid.1"]),
+              encryptionInfo: ""                                                                                                                                                                                                         
+            }                                                                                                                                                                                                                            
+          }]
+        }                                                                                                                                                                                                                                
+      });                                                                                                                                                                                                                              
+
+      document.getElementById('b2').onclick = () => run('A2', {
+        digital: {
+          requests: [{
+            protocol: "org-iso-mdoc",
+            data: buildJsonRequest("eu.europa.ec.eudi.pid.1")                                                                                                                                                                            
+          }]
+        }                                                                                                                                                                                                                                
+      });                                                                                                                                                                                                                              
+
+      document.getElementById('b3').onclick = () => run('B1', {                                                                                                                                                                          
+        digital: {
+          requests: [{                                                                                                                                                                                                                   
+            protocol: "org-iso-mdoc",                                                                                                                                                                                                  
+            data: {
+              deviceRequest: buildCborDeviceRequest(["md.gov.wallet.pid.1"]),
+              encryptionInfo: ""                                                                                                                                                                                                         
+            }
+          }]                                                                                                                                                                                                                             
+        }                                                                                                                                                                                                                              
+      });
+
+      document.getElementById('b4').onclick = () => run('B2', {
+        digital: {
+          requests: [{                                                                                                                                                                                                                   
+            protocol: "org-iso-mdoc",
+            data: buildJsonRequest("md.gov.wallet.pid.1")                                                                                                                                                                                
+          }]                                                                                                                                                                                                                           
+        }
+      });
+                                                                                                                                                                                                                                         
+      document.getElementById('b5').onclick = () => run('C', {
+        digital: {                                                                                                                                                                                                                       
+          requests: [{                                                                                                                                                                                                                 
+            protocol: "org-iso-mdoc",
+            data: {
+              deviceRequest: buildCborDeviceRequest([
+                "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                               
+                "md.gov.wallet.pid.1"
+              ]),                                                                                                                                                                                                                        
+              encryptionInfo: ""                                                                                                                                                                                                       
+            }                                                                                                                                                                                                                            
+          }]
+        }                                                                                                                                                                                                                                
+      });                                                                                                                                                                                                                              
     </script>
 </body>
 
