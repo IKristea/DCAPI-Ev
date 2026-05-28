@@ -2,100 +2,111 @@
 <html>
 
 <head>
-    <title>DCAPI Test</title>
+    <title>DCAPI Test v2</title>
 </head>
 
 <body style="font-family: sans-serif; padding: 20px">
-    <h1>Test DCAPI pentru EVO</h1>
-    <p>Browser: <span id="ua"></span></p>
-    <p>Support: <span id="support"></span></p>
-    <button id="btn1" style="padding: 15px; font-size: 16px; display:block; margin:10px 0">V1: requests + data</button>
-    <button id="btn2" style="padding: 15px; font-size: 16px; display:block; margin:10px 0">V2: providers + request</button>
-    <button id="btn3" style="padding: 15px; font-size: 16px; display:block; margin:10px 0">V3: OpenID4VP minimal</button>
-    <pre id="result"
-        style="white-space: pre-wrap; word-wrap: break-word; background: #eee; padding: 10px; margin-top: 20px"></pre>
+    <h1>DCAPI Test (formate noi)</h1>
+    <p>UA: <span id="ua"></span></p>
+    <button id="b1" style="padding:15px;display:block;margin:10px 0">A: mdoc preview API (Google)</button>
+    <button id="b2" style="padding:15px;display:block;margin:10px 0">B: org.iso.mdoc cu ALL fields</button>
+    <button id="b3" style="padding:15px;display:block;margin:10px 0">C: openid4vp DC API spec</button>
+    <button id="b4" style="padding:15px;display:block;margin:10px 0">D: preview-mdoc (legacy)</button>
+    <pre id="r" style="background:#eee;padding:10px;white-space:pre-wrap;word-wrap:break-word"></pre>
     <script>
         document.getElementById('ua').textContent = navigator.userAgent;                                                                                                                                                                   
-      document.getElementById('support').textContent =                                                                                                                                                                                   
-        ('credentials' in navigator) ? 'credentials API: YES' : 'credentials API: NO';                                                                                                                                                   
-                                                                                                                                                                                                                                         
-      const log = (msg) => {                                                                                                                                                                                                           
-        document.getElementById('result').textContent = msg;                                                                                                                                                                             
-        console.log(msg);                                                                                                                                                                                                              
-      };                                                                                                                                                                                                                                 
-                                                                                                                                                                                                                                         
-      const tryRequest = async (label, opts) => {
+      const log = m => document.getElementById('r').textContent = m;                                                                                                                                                                     
+      const run = async (label, opts) => {                                                                                                                                                                                             
         log(`Trying ${label}...`);                                                                                                                                                                                                       
-        try {                                                                                                                                                                                                                          
-          const cred = await navigator.credentials.get(opts);                                                                                                                                                                          
-          log(`SUCCESS (${label}):\n` + JSON.stringify(cred, null, 2));                                                                                                                                                                  
-        } catch (e) {             
-          log(`ERROR (${label}):\n${e.name}: ${e.message}\n\nStack:\n${e.stack || 'no stack'}`);                                                                                                                                         
+        try {                                                                                                                                                                                                                            
+          const c = await navigator.credentials.get(opts);
+          log(`SUCCESS ${label}:\n` + JSON.stringify(c, null, 2));                                                                                                                                                                       
+        } catch (e) {                                                                                                                                                                                                                    
+          log(`ERROR ${label}:\n${e.name}: ${e.message}`);
         }                                                                                                                                                                                                                                
       };                                                                                                                                                                                                                               
-                                                                                                                                                                                                                                         
-      // V1: older shape                                                                                                                                                                                                               
-      document.getElementById('btn1').onclick = () => tryRequest('V1', {                                                                                                                                                                 
-        digital: {                                                                                                                                                                                                                     
-          requests: [{                                                                                                                                                                                                                 
-            protocol: "org.iso.mdoc",                                                                                                                                                                                                    
-            data: {               
-              docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                        
-              nameSpaces: {                                                                                                                                                                                                            
-                "eu.europa.ec.eudi.pid.1": {                                                                                                                                                                                           
-                  "given_name": false,                                                                                                                                                                                                   
-                  "family_name": false
-                }                                                                                                                                                                                                                        
-              }                                                                                                                                                                                                                        
+
+      // A — Google's mdoc "preview" protocol (most common one wallets register against)                                                                                                                                                 
+      document.getElementById('b1').onclick = () => run('A', {
+        digital: {                                                                                                                                                                                                                       
+          providers: [{                                                                                                                                                                                                                
+            protocol: "preview",
+            request: {                                                                                                                                                                                                                   
+              selector: {
+                format: ["mdoc"],                                                                                                                                                                                                        
+                doctype: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                      
+                fields: [
+                  { namespace: "eu.europa.ec.eudi.pid.1", name: "given_name", intentToRetain: false },                                                                                                                                   
+                  { namespace: "eu.europa.ec.eudi.pid.1", name: "family_name", intentToRetain: false }                                                                                                                                   
+                ]                                                                                                                                                                                                                        
+              },                                                                                                                                                                                                                         
+              nonce: "test-" + Date.now(),                                                                                                                                                                                               
+              readerPublicKey: "BLANK"                                                                                                                                                                                                 
             }                                                                                                                                                                                                                            
-          }]                      
+          }]
         }                                                                                                                                                                                                                                
       });                                                                                                                                                                                                                              
 
-      // V2: providers shape
-      document.getElementById('btn2').onclick = () => tryRequest('V2', {
-        digital: {
-          providers: [{                                                                                                                                                                                                                
+      // B — org.iso.mdoc with all common fields
+      document.getElementById('b2').onclick = () => run('B', {
+        digital: {                                                                                                                                                                                                                       
+          providers: [{
             protocol: "org.iso.mdoc",                                                                                                                                                                                                    
-            request: {            
-              docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                        
-              nameSpaces: {                                                                                                                                                                                                            
-                "eu.europa.ec.eudi.pid.1": {                                                                                                                                                                                           
+            request: {                                                                                                                                                                                                                 
+              docType: "eu.europa.ec.eudi.pid.1",
+              nameSpaces: {                                                                                                                                                                                                              
+                "eu.europa.ec.eudi.pid.1": {
                   "given_name": false,                                                                                                                                                                                                   
-                  "family_name": false
+                  "family_name": false,                                                                                                                                                                                                
+                  "birth_date": false,
+                  "age_over_18": false,                                                                                                                                                                                                  
+                  "nationality": false
                 }                                                                                                                                                                                                                        
               }                                                                                                                                                                                                                        
             }
           }]
         }
       });
-                                                                                                                                                                                                                                       
-      // V3: OpenID4VP shape                                                                                                                                                                                                             
-      document.getElementById('btn3').onclick = () => tryRequest('V3', {
+
+      // C — OpenID4VP DC API (newer)                                                                                                                                                                                                    
+      document.getElementById('b3').onclick = () => run('C', {
         digital: {                                                                                                                                                                                                                       
-          requests: [{                                                                                                                                                                                                                 
+          providers: [{                                                                                                                                                                                                                
             protocol: "openid4vp",
-            data: {                                                                                                                                                                                                                    
+            request: JSON.stringify({
               response_type: "vp_token",                                                                                                                                                                                                 
               response_mode: "dc_api",
-              client_id: "web-origin:https://ikristea.github.io",                                                                                                                                                                        
-              nonce: "test-nonce-" + Date.now(),                                                                                                                                                                                       
-              presentation_definition: {                                                                                                                                                                                                 
-                id: "pid-request",                                                                                                                                                                                                     
-                input_descriptors: [{                                                                                                                                                                                                    
-                  id: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                       
-                  format: { mso_mdoc: { alg: ["ES256"] } },                                                                                                                                                                              
-                  constraints: {                                                                                                                                                                                                       
-                    fields: [                                                                                                                                                                                                            
-                      { path: ["$['eu.europa.ec.eudi.pid.1']['given_name']"], intent_to_retain: false },                                                                                                                                 
-                      { path: ["$['eu.europa.ec.eudi.pid.1']['family_name']"], intent_to_retain: false }                                                                                                                                 
-                    ]                                                                                                                                                                                                                    
-                  }                                                                                                                                                                                                                      
-                }]                                                                                                                                                                                                                       
+              client_id: "web-origin:" + window.location.origin,                                                                                                                                                                         
+              nonce: "test-" + Date.now(),                                                                                                                                                                                               
+              dcql_query: {
+                credentials: [{                                                                                                                                                                                                          
+                  id: "pid",                                                                                                                                                                                                           
+                  format: "mso_mdoc",                                                                                                                                                                                                    
+                  meta: { doctype_value: "eu.europa.ec.eudi.pid.1" },
+                  claims: [                                                                                                                                                                                                              
+                    { path: ["eu.europa.ec.eudi.pid.1", "given_name"] },                                                                                                                                                               
+                    { path: ["eu.europa.ec.eudi.pid.1", "family_name"] }                                                                                                                                                                 
+                  ]                                                                                                                                                                                                                      
+                }]
               }                                                                                                                                                                                                                          
-            }                                                                                                                                                                                                                            
-          }]                                                                                                                                                                                                                           
+            })                                                                                                                                                                                                                         
+          }]
         }
+      });
+
+      // D — older preview-mdoc protocol name                                                                                                                                                                                            
+      document.getElementById('b4').onclick = () => run('D', {
+        digital: {                                                                                                                                                                                                                       
+          providers: [{                                                                                                                                                                                                                
+            protocol: "preview-mdoc",
+            request: {                                                                                                                                                                                                                   
+              docType: "eu.europa.ec.eudi.pid.1",
+              nameSpaces: {                                                                                                                                                                                                              
+                "eu.europa.ec.eudi.pid.1": ["given_name", "family_name"]                                                                                                                                                               
+              }                                                                                                                                                                                                                          
+            }
+          }]                                                                                                                                                                                                                             
+        }                                                                                                                                                                                                                              
       });
     </script>
 </body>
