@@ -1,116 +1,89 @@
-<!DOCTYPE html>
-<html>
-
-<head>
-    <title>DCAPI Test — with encryption</title>
-    <script src="https://cdn.jsdelivr.net/npm/cbor-x@1.5.9/dist/index.min.js"></script>
-</head>
-
-<body style="font-family: sans-serif; padding: 20px">
-    <h1>DCAPI — ISO 18013-7 cu criptare</h1>
-    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">EU PID + encryption</button>
-    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">MD PID + encryption</button>
-    <pre id="r" style="background:#eee;padding:10px;white-space:pre-wrap;word-wrap:break-word;font-size:12px"></pre>
-    <script>
-        const log = m => document.getElementById('r').textContent = m;
-
-      function b64url(bytes) {
-        let bin = '';
+<!DOCTYPE html>                                                                                                                                                                                                                        
+  <html>                                                                                                                                                                                                                                 
+  <head>
+    <title>DCAPI — MD docs fix</title>                                                                                                                                                                                                   
+    <script src="https://cdn.jsdelivr.net/npm/cbor-x@1.5.9/dist/index.min.js"></script>                                                                                                                                                
+  </head>                                                                                                                                                                                                                                
+  <body style="font-family: sans-serif; padding: 20px">
+    <h1>DCAPI — MD documents</h1>                                                                                                                                                                                                        
+    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">MD PID (namespace=md.gov.wallet)</button>                                                                                                          
+    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">MD DL (namespace=md.gov.wallet)</button>                                                                                                             
+    <button id="b3" style="padding:15px;display:block;margin:10px 0;font-size:16px">MD VRC (namespace=md.gov.wallet)</button>                                                                                                            
+    <button id="b4" style="padding:15px;display:block;margin:10px 0;font-size:16px">ISO mDL (namespace=org.iso.18013.5.1)</button>                                                                                                       
+    <button id="b5" style="padding:15px;display:block;margin:10px 0;font-size:16px">EU PID (namespace=eu.europa.ec.eudi.pid.1)</button>                                                                                                  
+    <pre id="r" style="background:#eee;padding:10px;white-space:pre-wrap;word-wrap:break-word"></pre>                                                                                                                                    
+    <script>                                                                                                                                                                                                                             
+      const log = m => document.getElementById('r').textContent = m;                                                                                                                                                                     
+      function b64url(bytes) {                                                                                                                                                                                                           
+        let bin = '';                                                                                                                                                                                                                    
         for (const b of bytes) bin += String.fromCharCode(b);
-        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      }
-
-      async function buildEncryptionInfo() {
-        // 1. Generate ephemeral EC P-256 key pair
-        const keyPair = await crypto.subtle.generateKey(
-          { name: "ECDH", namedCurve: "P-256" },
-          true,                                                                                                                                                                                                                          
-          ["deriveBits"]
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');                                                                                                                                                     
+      }                                                                                                                                                                                                                                  
+   
+      async function buildEncryptionInfo() {                                                                                                                                                                                             
+        const keyPair = await crypto.subtle.generateKey(                                                                                                                                                                               
+          { name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]                                                                                                                                                                    
         );                                                                                                                                                                                                                               
-        // 2. Export public key raw (0x04 | x | y)                                                                                                                                                                                     
-        const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));                                                                                                                                          
-        const x = rawPub.slice(1, 33);
-        const y = rawPub.slice(33, 65);                                                                                                                                                                                                  
-                                                                                                                                                                                                                                       
-        // 3. Build COSE_Key (CBOR map with int keys)                                                                                                                                                                                    
-        //    1=kty (2=EC2), -1=crv (1=P-256), -2=x, -3=y                                                                                                                                                                              
-        const encoder = new CBOR.Encoder({ useRecords: false, mapsAsObjects: false });                                                                                                                                                   
-        const coseKey = new Map([                                                                                                                                                                                                        
-          [1, 2],   // kty: EC2                                                                                                                                                                                                          
-          [-1, 1],  // crv: P-256                                                                                                                                                                                                        
-          [-2, x],  // x                                                                                                                                                                                                                 
-          [-3, y],  // y
-        ]);                                                                                                                                                                                                                              
-                                                                                                                                                                                                                                       
-        // 4. Random 16-byte nonce
-        const nonce = crypto.getRandomValues(new Uint8Array(16));
-                                                                                                                                                                                                                                         
-        // 5. EncryptionParameters map
-        const encryptionParameters = new Map([                                                                                                                                                                                           
-          ["nonce", nonce],                                                                                                                                                                                                            
+        const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));
+        const enc = new CBOR.Encoder({ useRecords: false, mapsAsObjects: false });                                                                                                                                                       
+        const coseKey = new Map([[1, 2], [-1, 1], [-2, rawPub.slice(1, 33)], [-3, rawPub.slice(33, 65)]]);                                                                                                                               
+        const params = new Map([                                                                                                                                                                                                         
+          ["nonce", crypto.getRandomValues(new Uint8Array(16))],                                                                                                                                                                         
           ["recipientPublicKey", coseKey],                                                                                                                                                                                               
-        ]);
-                                                                                                                                                                                                                                         
-        // 6. EncryptionInfo = ["dcapi", EncryptionParameters]                                                                                                                                                                           
-        const encryptionInfo = ["dcapi", encryptionParameters];
-        const encryptionInfoBytes = encoder.encode(encryptionInfo);                                                                                                                                                                      
-                                                                                                                                                                                                                                       
-        return {                                                                                                                                                                                                                         
-          encryptionInfo: b64url(new Uint8Array(encryptionInfoBytes)),
-          privateKey: keyPair.privateKey, // keep for decryption later if needed                                                                                                                                                         
-        };                                                                                                                                                                                                                               
-      }
-                                                                                                                                                                                                                                         
-      function buildCborDeviceRequest(docTypes) {                                                                                                                                                                                      
-        const encoder = new CBOR.Encoder({ useRecords: false, mapsAsObjects: false });
-        const docRequests = docTypes.map(docType => {                                                                                                                                                                                    
-          const itemsRequest = new Map([
-            ["docType", docType],                                                                                                                                                                                                        
-            ["nameSpaces", new Map([                                                                                                                                                                                                   
-              [docType, new Map([                                                                                                                                                                                                        
-                ["given_name", false],                                                                                                                                                                                                 
-                ["family_name", false],
-                ["birth_date", false],
-              ])]                                                                                                                                                                                                                        
-            ])]
-          ]);                                                                                                                                                                                                                            
-          const bytes = encoder.encode(itemsRequest);                                                                                                                                                                                  
-          return new Map([["itemsRequest", new CBOR.Tag(bytes, 24)]]);
-        });                                                                                                                                                                                                                              
-        const deviceRequest = new Map([
-          ["version", "1.0"],                                                                                                                                                                                                            
-          ["docRequests", docRequests],                                                                                                                                                                                                
         ]);                                                                                                                                                                                                                              
-        return b64url(new Uint8Array(encoder.encode(deviceRequest)));
+        return b64url(new Uint8Array(enc.encode(["dcapi", params])));
       }                                                                                                                                                                                                                                  
                                                                                                                                                                                                                                        
-      async function run(label, docType) {
-        log(`${label}: building encryption + request...`);
+      function buildCborDeviceRequest(docType, namespace, fields) {                                                                                                                                                                      
+        const enc = new CBOR.Encoder({ useRecords: false, mapsAsObjects: false });
+        const fieldMap = new Map(fields.map(f => [f, false]));                                                                                                                                                                           
+        const itemsRequest = new Map([                                                                                                                                                                                                 
+          ["docType", docType],                                                                                                                                                                                                          
+          ["nameSpaces", new Map([[namespace, fieldMap]])],                                                                                                                                                                            
+        ]);                                                                                                                                                                                                                              
+        const itemsRequestBytes = enc.encode(itemsRequest);
+        const deviceRequest = new Map([                                                                                                                                                                                                  
+          ["version", "1.0"],                                                                                                                                                                                                          
+          ["docRequests", [new Map([["itemsRequest", new CBOR.Tag(itemsRequestBytes, 24)]])]],                                                                                                                                           
+        ]);                                                                                                                                                                                                                              
+        return b64url(new Uint8Array(enc.encode(deviceRequest)));                                                                                                                                                                        
+      }                                                                                                                                                                                                                                  
+                                                                                                                                                                                                                                       
+      async function run(label, docType, namespace, fields) {
+        log(`${label}...`);
         try {                                                                                                                                                                                                                            
-          const { encryptionInfo } = await buildEncryptionInfo();
-          const deviceRequest = buildCborDeviceRequest([docType]);                                                                                                                                                                       
-                                                                                                                                                                                                                                         
-          log(`${label}: calling navigator.credentials.get...`);
+          const encryptionInfo = await buildEncryptionInfo();
+          const deviceRequest = buildCborDeviceRequest(docType, namespace, fields);                                                                                                                                                      
           const cred = await navigator.credentials.get({                                                                                                                                                                                 
-            digital: {                                                                                                                                                                                                                 
-              requests: [{                                                                                                                                                                                                               
-                protocol: "org-iso-mdoc",
-                data: { deviceRequest, encryptionInfo }                                                                                                                                                                                  
-              }]                                                                                                                                                                                                                         
-            }
+            digital: { requests: [{ protocol: "org-iso-mdoc", data: { deviceRequest, encryptionInfo } }] }
           });                                                                                                                                                                                                                            
-          log(`SUCCESS ${label}:\n` + JSON.stringify(cred, (k, v) => {                                                                                                                                                                 
-            if (v instanceof Uint8Array) return `[${v.length} bytes]`;                                                                                                                                                                   
-            return v;
-          }, 2));                                                                                                                                                                                                                        
-        } catch (e) {                                                                                                                                                                                                                  
-          log(`ERROR ${label}:\n${e.name}: ${e.message}`);                                                                                                                                                                               
-        }                                                                                                                                                                                                                              
-      }
-
-      document.getElementById('b1').onclick = () => run('EU PID', 'eu.europa.ec.eudi.pid.1');                                                                                                                                            
-      document.getElementById('b2').onclick = () => run('MD PID', 'md.gov.wallet.pid.1');
-    </script>
-</body>
-
-</html>
+          log(`SUCCESS ${label}:\n` + JSON.stringify(cred, (k, v) => v instanceof Uint8Array ? `[${v.length}b]` : v, 2));                                                                                                              
+        } catch (e) {                                                                                                                                                                                                                    
+          log(`ERROR ${label}:\n${e.name}: ${e.message}`);                                                                                                                                                                             
+        }                                                                                                                                                                                                                                
+      }                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                         
+      // MD docs use "md.gov.wallet" as the shared namespace                                                                                                                                                                             
+      document.getElementById('b1').onclick = () => run(
+        'MD PID', 'md.gov.wallet.pid.1', 'md.gov.wallet',                                                                                                                                                                                
+        ['given_name', 'family_name', 'idnp', 'document_number']                                                                                                                                                                         
+      );
+      document.getElementById('b2').onclick = () => run(                                                                                                                                                                                 
+        'MD DL', 'md.gov.wallet.dl.1', 'md.gov.wallet',                                                                                                                                                                                
+        ['given_name', 'family_name', 'idnp', 'driving_privileges']                                                                                                                                                                      
+      );
+      document.getElementById('b3').onclick = () => run(                                                                                                                                                                                 
+        'MD VRC', 'md.gov.wallet.vrc.1', 'md.gov.wallet',                                                                                                                                                                                
+        ['plate_number', 'vin', 'make']
+      );                                                                                                                                                                                                                                 
+      document.getElementById('b4').onclick = () => run(                                                                                                                                                                               
+        'ISO mDL', 'org.iso.18013.5.1.mDL', 'org.iso.18013.5.1',                                                                                                                                                                         
+        ['given_name', 'family_name', 'birth_date']                                                                                                                                                                                      
+      );
+      document.getElementById('b5').onclick = () => run(                                                                                                                                                                                 
+        'EU PID', 'eu.europa.ec.eudi.pid.1', 'eu.europa.ec.eudi.pid.1',                                                                                                                                                                
+        ['given_name', 'family_name', 'birth_date']                                                                                                                                                                                      
+      );
+    </script>                                                                                                                                                                                                                            
+  </body>                                                                                                                                                                                                                                
+  </html>
