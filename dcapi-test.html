@@ -1,42 +1,103 @@
-<!DOCTYPE html>                                                                                                                                                                                                                        
-  <html>                                                                                                                                                                                                                               
-  <head><title>DCAPI Test</title></head>
-  <body style="font-family: sans-serif; padding: 20px">
-    <h1>Test DCAPI pentru EVO</h1>                                                                                                                                                                                                       
-    <button id="btn" style="padding: 20px; font-size: 18px">Cere PID</button>
-    <pre id="result" style="white-space: pre-wrap; word-wrap: break-word"></pre>                                                                                                                                                         
-    <script>                                                                                                                                                                                                                             
-      document.getElementById('btn').onclick = async () => {                                                                                                                                                                             
-        const result = document.getElementById('result');                                                                                                                                                                                
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>DCAPI Test</title>
+</head>
+
+<body style="font-family: sans-serif; padding: 20px">
+    <h1>Test DCAPI pentru EVO</h1>
+    <p>Browser: <span id="ua"></span></p>
+    <p>Support: <span id="support"></span></p>
+    <button id="btn1" style="padding: 15px; font-size: 16px; display:block; margin:10px 0">V1: requests + data</button>
+    <button id="btn2" style="padding: 15px; font-size: 16px; display:block; margin:10px 0">V2: providers + request</button>
+    <button id="btn3" style="padding: 15px; font-size: 16px; display:block; margin:10px 0">V3: OpenID4VP minimal</button>
+    <pre id="result"
+        style="white-space: pre-wrap; word-wrap: break-word; background: #eee; padding: 10px; margin-top: 20px"></pre>
+    <script>
+        document.getElementById('ua').textContent = navigator.userAgent;                                                                                                                                                                   
+      document.getElementById('support').textContent =                                                                                                                                                                                   
+        ('credentials' in navigator) ? 'credentials API: YES' : 'credentials API: NO';                                                                                                                                                   
+                                                                                                                                                                                                                                         
+      const log = (msg) => {                                                                                                                                                                                                           
+        document.getElementById('result').textContent = msg;                                                                                                                                                                             
+        console.log(msg);                                                                                                                                                                                                              
+      };                                                                                                                                                                                                                                 
+                                                                                                                                                                                                                                         
+      const tryRequest = async (label, opts) => {
+        log(`Trying ${label}...`);                                                                                                                                                                                                       
         try {                                                                                                                                                                                                                          
-          const cred = await navigator.credentials.get({                                                                                                                                                                                 
-            digital: {                                                                                                                                                                                                                 
-              providers: [{
-                protocol: "org.iso.mdoc",
-                request: {                                                                                                                                                                                                               
-                  deviceRequest: {
-                    docRequests: [{                                                                                                                                                                                                      
-                      itemsRequest: {                                                                                                                                                                                                  
-                        docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                              
-                        nameSpaces: {                                                                                                                                                                                                    
-                          "eu.europa.ec.eudi.pid.1": {
-                            "given_name": false,                                                                                                                                                                                         
-                            "family_name": false,                                                                                                                                                                                      
-                            "birth_date": false
-                          }                                                                                                                                                                                                              
-                        }
-                      }                                                                                                                                                                                                                  
-                    }]                                                                                                                                                                                                                 
-                  }
-                }
-              }]
-            }
-          });
-          result.textContent = "SUCCESS:\n" + JSON.stringify(cred, null, 2);
-        } catch (e) {                                                                                                                                                                                                                    
-          result.textContent = "ERROR: " + e.name + " - " + e.message;
+          const cred = await navigator.credentials.get(opts);                                                                                                                                                                          
+          log(`SUCCESS (${label}):\n` + JSON.stringify(cred, null, 2));                                                                                                                                                                  
+        } catch (e) {             
+          log(`ERROR (${label}):\n${e.name}: ${e.message}\n\nStack:\n${e.stack || 'no stack'}`);                                                                                                                                         
         }                                                                                                                                                                                                                                
       };                                                                                                                                                                                                                               
-    </script>                                                                                                                                                                                                                            
-  </body>                                                                                                                                                                                                                              
-  </html>
+                                                                                                                                                                                                                                         
+      // V1: older shape                                                                                                                                                                                                               
+      document.getElementById('btn1').onclick = () => tryRequest('V1', {                                                                                                                                                                 
+        digital: {                                                                                                                                                                                                                     
+          requests: [{                                                                                                                                                                                                                 
+            protocol: "org.iso.mdoc",                                                                                                                                                                                                    
+            data: {               
+              docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                        
+              nameSpaces: {                                                                                                                                                                                                            
+                "eu.europa.ec.eudi.pid.1": {                                                                                                                                                                                           
+                  "given_name": false,                                                                                                                                                                                                   
+                  "family_name": false
+                }                                                                                                                                                                                                                        
+              }                                                                                                                                                                                                                        
+            }                                                                                                                                                                                                                            
+          }]                      
+        }                                                                                                                                                                                                                                
+      });                                                                                                                                                                                                                              
+
+      // V2: providers shape
+      document.getElementById('btn2').onclick = () => tryRequest('V2', {
+        digital: {
+          providers: [{                                                                                                                                                                                                                
+            protocol: "org.iso.mdoc",                                                                                                                                                                                                    
+            request: {            
+              docType: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                        
+              nameSpaces: {                                                                                                                                                                                                            
+                "eu.europa.ec.eudi.pid.1": {                                                                                                                                                                                           
+                  "given_name": false,                                                                                                                                                                                                   
+                  "family_name": false
+                }                                                                                                                                                                                                                        
+              }                                                                                                                                                                                                                        
+            }
+          }]
+        }
+      });
+                                                                                                                                                                                                                                       
+      // V3: OpenID4VP shape                                                                                                                                                                                                             
+      document.getElementById('btn3').onclick = () => tryRequest('V3', {
+        digital: {                                                                                                                                                                                                                       
+          requests: [{                                                                                                                                                                                                                 
+            protocol: "openid4vp",
+            data: {                                                                                                                                                                                                                    
+              response_type: "vp_token",                                                                                                                                                                                                 
+              response_mode: "dc_api",
+              client_id: "web-origin:https://ikristea.github.io",                                                                                                                                                                        
+              nonce: "test-nonce-" + Date.now(),                                                                                                                                                                                       
+              presentation_definition: {                                                                                                                                                                                                 
+                id: "pid-request",                                                                                                                                                                                                     
+                input_descriptors: [{                                                                                                                                                                                                    
+                  id: "eu.europa.ec.eudi.pid.1",                                                                                                                                                                                       
+                  format: { mso_mdoc: { alg: ["ES256"] } },                                                                                                                                                                              
+                  constraints: {                                                                                                                                                                                                       
+                    fields: [                                                                                                                                                                                                            
+                      { path: ["$['eu.europa.ec.eudi.pid.1']['given_name']"], intent_to_retain: false },                                                                                                                                 
+                      { path: ["$['eu.europa.ec.eudi.pid.1']['family_name']"], intent_to_retain: false }                                                                                                                                 
+                    ]                                                                                                                                                                                                                    
+                  }                                                                                                                                                                                                                      
+                }]                                                                                                                                                                                                                       
+              }                                                                                                                                                                                                                          
+            }                                                                                                                                                                                                                            
+          }]                                                                                                                                                                                                                           
+        }
+      });
+    </script>
+</body>
+
+</html>
