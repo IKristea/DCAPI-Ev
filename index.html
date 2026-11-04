@@ -1,89 +1,453 @@
-<!DOCTYPE html>                                                                                                                                                                                                                        
-  <html>                                                                                                                                                                                                                                 
-  <head>
-    <title>DCAPI — MD docs fix</title>                                                                                                                                                                                                   
-    <script src="https://cdn.jsdelivr.net/npm/cbor-x@1.5.9/dist/index.min.js"></script>                                                                                                                                                
-  </head>                                                                                                                                                                                                                                
-  <body style="font-family: sans-serif; padding: 20px">
-    <h1>DCAPI — MD documents</h1>                                                                                                                                                                                                        
-    <button id="b1" style="padding:15px;display:block;margin:10px 0;font-size:16px">MD PID (namespace=md.gov.wallet)</button>                                                                                                          
-    <button id="b2" style="padding:15px;display:block;margin:10px 0;font-size:16px">MD DL (namespace=md.gov.wallet)</button>                                                                                                             
-    <button id="b3" style="padding:15px;display:block;margin:10px 0;font-size:16px">MD VRC (namespace=md.gov.wallet)</button>                                                                                                            
-    <button id="b4" style="padding:15px;display:block;margin:10px 0;font-size:16px">ISO mDL (namespace=org.iso.18013.5.1)</button>                                                                                                       
-    <button id="b5" style="padding:15px;display:block;margin:10px 0;font-size:16px">EU PID (namespace=eu.europa.ec.eudi.pid.1)</button>                                                                                                  
-    <pre id="r" style="background:#eee;padding:10px;white-space:pre-wrap;word-wrap:break-word"></pre>                                                                                                                                    
-    <script>                                                                                                                                                                                                                             
-      const log = m => document.getElementById('r').textContent = m;                                                                                                                                                                     
-      function b64url(bytes) {                                                                                                                                                                                                           
-        let bin = '';                                                                                                                                                                                                                    
-        for (const b of bytes) bin += String.fromCharCode(b);
-        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');                                                                                                                                                     
-      }                                                                                                                                                                                                                                  
-   
-      async function buildEncryptionInfo() {                                                                                                                                                                                             
-        const keyPair = await crypto.subtle.generateKey(                                                                                                                                                                               
-          { name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]                                                                                                                                                                    
-        );                                                                                                                                                                                                                               
-        const rawPub = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));
-        const enc = new CBOR.Encoder({ useRecords: false, mapsAsObjects: false });                                                                                                                                                       
-        const coseKey = new Map([[1, 2], [-1, 1], [-2, rawPub.slice(1, 33)], [-3, rawPub.slice(33, 65)]]);                                                                                                                               
-        const params = new Map([                                                                                                                                                                                                         
-          ["nonce", crypto.getRandomValues(new Uint8Array(16))],                                                                                                                                                                         
-          ["recipientPublicKey", coseKey],                                                                                                                                                                                               
-        ]);                                                                                                                                                                                                                              
-        return b64url(new Uint8Array(enc.encode(["dcapi", params])));
-      }                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                       
-      function buildCborDeviceRequest(docType, namespace, fields) {                                                                                                                                                                      
-        const enc = new CBOR.Encoder({ useRecords: false, mapsAsObjects: false });
-        const fieldMap = new Map(fields.map(f => [f, false]));                                                                                                                                                                           
-        const itemsRequest = new Map([                                                                                                                                                                                                 
-          ["docType", docType],                                                                                                                                                                                                          
-          ["nameSpaces", new Map([[namespace, fieldMap]])],                                                                                                                                                                            
-        ]);                                                                                                                                                                                                                              
-        const itemsRequestBytes = enc.encode(itemsRequest);
-        const deviceRequest = new Map([                                                                                                                                                                                                  
-          ["version", "1.0"],                                                                                                                                                                                                          
-          ["docRequests", [new Map([["itemsRequest", new CBOR.Tag(itemsRequestBytes, 24)]])]],                                                                                                                                           
-        ]);                                                                                                                                                                                                                              
-        return b64url(new Uint8Array(enc.encode(deviceRequest)));                                                                                                                                                                        
-      }                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                       
-      async function run(label, docType, namespace, fields) {
-        log(`${label}...`);
-        try {                                                                                                                                                                                                                            
-          const encryptionInfo = await buildEncryptionInfo();
-          const deviceRequest = buildCborDeviceRequest(docType, namespace, fields);                                                                                                                                                      
-          const cred = await navigator.credentials.get({                                                                                                                                                                                 
-            digital: { requests: [{ protocol: "org-iso-mdoc", data: { deviceRequest, encryptionInfo } }] }
-          });                                                                                                                                                                                                                            
-          log(`SUCCESS ${label}:\n` + JSON.stringify(cred, (k, v) => v instanceof Uint8Array ? `[${v.length}b]` : v, 2));                                                                                                              
-        } catch (e) {                                                                                                                                                                                                                    
-          log(`ERROR ${label}:\n${e.name}: ${e.message}`);                                                                                                                                                                             
-        }                                                                                                                                                                                                                                
-      }                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                         
-      // MD docs use "md.gov.wallet" as the shared namespace                                                                                                                                                                             
-      document.getElementById('b1').onclick = () => run(
-        'MD PID', 'md.gov.wallet.pid.1', 'md.gov.wallet',                                                                                                                                                                                
-        ['given_name', 'family_name', 'idnp', 'document_number']                                                                                                                                                                         
-      );
-      document.getElementById('b2').onclick = () => run(                                                                                                                                                                                 
-        'MD DL', 'md.gov.wallet.dl.1', 'md.gov.wallet',                                                                                                                                                                                
-        ['given_name', 'family_name', 'idnp', 'driving_privileges']                                                                                                                                                                      
-      );
-      document.getElementById('b3').onclick = () => run(                                                                                                                                                                                 
-        'MD VRC', 'md.gov.wallet.vrc.1', 'md.gov.wallet',                                                                                                                                                                                
-        ['plate_number', 'vin', 'make']
-      );                                                                                                                                                                                                                                 
-      document.getElementById('b4').onclick = () => run(                                                                                                                                                                               
-        'ISO mDL', 'org.iso.18013.5.1.mDL', 'org.iso.18013.5.1',                                                                                                                                                                         
-        ['given_name', 'family_name', 'birth_date']                                                                                                                                                                                      
-      );
-      document.getElementById('b5').onclick = () => run(                                                                                                                                                                                 
-        'EU PID', 'eu.europa.ec.eudi.pid.1', 'eu.europa.ec.eudi.pid.1',                                                                                                                                                                
-        ['given_name', 'family_name', 'birth_date']                                                                                                                                                                                      
-      );
-    </script>                                                                                                                                                                                                                            
-  </body>                                                                                                                                                                                                                                
-  </html>
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EVO Verifier Web</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/cbor-x@1.5.9/dist/index.min.js"></script>
+  <!-- Reader-auth identity (test key + certificate signed by the EVO Verifier Test CA). Optional:
+       without it requests are sent unsigned and EVO shows no "Solicitant". -->
+  <script src="reader-key.js" onerror="window.READER = null"></script>
+  <style>
+    :root {
+      --bg: #eef3fb; --surface: #ffffff; --surface-2: #f5f8fd; --text: #0d1b33; --muted: #5b6b85;
+      --border: #dde5f2; --brand: #0f62f0; --brand-2: #01247a; --ok: #12a874; --ok-bg: #e3f7ef;
+      --err: #d93a3a; --err-bg: #fdecec; --warn: #b7791f; --warn-bg: #fdf4e3; --shadow: 0 8px 28px rgba(1, 36, 122, .10);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0a1224; --surface: #111c33; --surface-2: #16233f; --text: #e8eefb; --muted: #9aabc8;
+        --border: #233457; --ok-bg: #0f2f26; --err-bg: #3a1717; --warn-bg: #352a12; --shadow: 0 8px 28px rgba(0,0,0,.35);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+    header {
+      background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%); color: #fff;
+      padding: 28px 16px 64px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    header h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.3px; display: flex; align-items: center; gap: 10px; }
+    header p { margin: 6px 0 0; opacity: .85; font-size: 15px; }
+    .logo { width: 36px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.16); display: grid; place-items: center; }
+    main { margin-top: -44px; padding: 0 16px 40px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 16px; }
+    .card h2 { margin: 0 0 4px; font-size: 17px; }
+    .sub { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+    .docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .doc {
+      appearance: none; text-align: left; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2);
+      color: var(--text); border-radius: 14px; padding: 14px; display: flex; gap: 12px; align-items: center; font: inherit;
+      transition: transform .12s, border-color .12s, box-shadow .12s;
+    }
+    .doc:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(15,98,240,.15); transform: translateY(-1px); }
+    .doc:disabled { opacity: .55; cursor: progress; transform: none; }
+    .doc .ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; flex: none; background: #fff; border: 1px solid var(--border); }
+    .doc b { display: block; font-size: 15px; }
+    .doc span { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
+    .pill.ok { background: var(--ok-bg); color: var(--ok); }
+    .pill.err { background: var(--err-bg); color: var(--err); }
+    .pill.warn { background: var(--warn-bg); color: var(--warn); }
+    .signer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; font-size: 13px; color: var(--muted); }
+    .status { display: flex; gap: 14px; align-items: flex-start; }
+    .status .big { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; flex: none; }
+    .status.ok .big { background: var(--ok-bg); color: var(--ok); }
+    .status.err .big { background: var(--err-bg); color: var(--err); }
+    .status.busy .big { background: var(--surface-2); }
+    .status h3 { margin: 2px 0 4px; font-size: 17px; }
+    .status p { margin: 0; color: var(--muted); font-size: 14px; word-break: break-word; }
+    .spin { width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: s 0.8s linear infinite; }
+    @keyframes s { to { transform: rotate(360deg); } }
+    .idcard { border-radius: 18px; overflow: hidden; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); margin-bottom: 16px; }
+    .idhead { background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%); color: #fff; padding: 18px 20px; display: flex; gap: 16px; align-items: center; }
+    .idhead img, .idhead .ph { width: 76px; height: 96px; border-radius: 10px; object-fit: cover; background: rgba(255,255,255,.18); flex: none; display: grid; place-items: center; font-size: 34px; }
+    .idhead .t { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; opacity: .8; }
+    .idhead .n { font-size: 22px; font-weight: 700; margin-top: 2px; line-height: 1.2; }
+    .idhead .badges { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .idhead .badges .pill { background: rgba(255,255,255,.18); color: #fff; }
+    .rows { padding: 6px 20px 14px; }
+    .row { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 14.5px; }
+    .row:last-child { border-bottom: 0; }
+    .row .k { color: var(--muted); }
+    .row .v { font-weight: 600; text-align: right; word-break: break-word; }
+    .row .v.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; font-size: 13px; }
+    details { margin-top: 4px; }
+    summary { cursor: pointer; color: var(--brand); font-weight: 600; font-size: 14px; padding: 8px 0; }
+    pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    .checks { display: grid; gap: 8px; margin: 6px 0 4px; }
+    .check { display: flex; gap: 10px; align-items: center; font-size: 14px; }
+    footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 8px 16px 28px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1><span class="logo">✓</span> EVO Verifier Web</h1>
+    <p>Verificarea documentelor din EVO Wallet prin Digital Credentials API (ISO/IEC 18013-7, Annex C)</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <h2>Ce document dorești să verifici?</h2>
+    <p class="sub">Alege tipul documentului. Telefonul îți va propune EVO Wallet pentru a-l partaja.</p>
+    <div class="docs" id="docs"></div>
+    <div class="signer" id="signer"></div>
+  </section>
+
+  <section id="statusCard" class="card hidden"><div id="status"></div></section>
+  <section id="result"></section>
+</main>
+
+<footer>Pagină de test pentru EVO Wallet · datele nu părăsesc acest browser</footer>
+
+<script>
+'use strict';
+
+/* ------------------------------------------------------------------ requests */
+
+const DOCS = [
+  { id: 'pid', icon: '🪪', title: 'Buletin (MD PID)', hint: 'md.gov.wallet.pid.1',
+    docType: 'md.gov.wallet.pid.1', ns: 'md.gov.wallet',
+    fields: ['family_name', 'given_name', 'birth_date', 'idnp', 'document_number', 'sex', 'nationality', 'issue_date', 'expiry_date', 'portrait'] },
+  { id: 'dl', icon: '🚗', title: 'Permis de conducere (MD)', hint: 'md.gov.wallet.dl.1',
+    docType: 'md.gov.wallet.dl.1', ns: 'md.gov.wallet',
+    fields: ['family_name', 'given_name', 'birth_date', 'idnp', 'document_number', 'issue_date', 'expiry_date', 'driving_privileges', 'portrait'] },
+  { id: 'vrc', icon: '📄', title: 'Certificat înmatriculare', hint: 'md.gov.wallet.vrc.1',
+    docType: 'md.gov.wallet.vrc.1', ns: 'md.gov.wallet',
+    fields: ['plate_number', 'vin', 'make', 'model', 'color', 'year_of_manufacture', 'owner_name'] },
+  { id: 'age', icon: '🔞', title: 'Vârstă peste 18', hint: 'doar age_over_18 din PID',
+    docType: 'md.gov.wallet.pid.1', ns: 'md.gov.wallet', fields: ['age_over_18'] },
+  { id: 'mdl', icon: '🌐', title: 'ISO mDL', hint: 'org.iso.18013.5.1.mDL',
+    docType: 'org.iso.18013.5.1.mDL', ns: 'org.iso.18013.5.1',
+    fields: ['family_name', 'given_name', 'birth_date', 'document_number', 'expiry_date', 'portrait'] },
+  { id: 'eupid', icon: '🇪🇺', title: 'EU PID', hint: 'eu.europa.ec.eudi.pid.1',
+    docType: 'eu.europa.ec.eudi.pid.1', ns: 'eu.europa.ec.eudi.pid.1',
+    fields: ['family_name', 'given_name', 'birth_date', 'nationality'] },
+];
+
+const LABELS = {
+  family_name: 'Nume', given_name: 'Prenume', birth_date: 'Data nașterii', idnp: 'IDNP',
+  document_number: 'Nr. document', sex: 'Sex', nationality: 'Cetățenie', issue_date: 'Data emiterii',
+  expiry_date: 'Valabil până la', portrait: 'Fotografie', driving_privileges: 'Categorii',
+  plate_number: 'Număr înmatriculare', vin: 'VIN', make: 'Marca', model: 'Model', color: 'Culoare',
+  year_of_manufacture: 'Anul fabricației', owner_name: 'Proprietar', age_over_18: 'Peste 18 ani',
+  issuing_authority: 'Emis de', issuing_country: 'Țara emitentă', birth_place: 'Locul nașterii',
+  resident_address: 'Adresa', age_in_years: 'Vârsta',
+};
+const DOC_TITLES = Object.fromEntries(DOCS.map(d => [d.docType, d.title]));
+
+/* ------------------------------------------------------------------ helpers */
+
+const $ = id => document.getElementById(id);
+const te = new TextEncoder();
+const cbor = new CBOR.Encoder({ useRecords: false, mapsAsObjects: false, tagUint8Array: false });
+const decoder = new CBOR.Decoder({ useRecords: false, mapsAsObjects: false });
+const decodeCbor = bytes => decoder.decode(bytes);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function b64url(bytes) {
+  let bin = ''; for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function fromB64(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '=';
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+const concat = (...arrs) => { const out = new Uint8Array(arrs.reduce((n, a) => n + a.length, 0)); let o = 0; for (const a of arrs) { out.set(a, o); o += a.length; } return out; };
+const i2osp = (n, len) => { const b = new Uint8Array(len); for (let i = len - 1; i >= 0; i--) { b[i] = n & 0xff; n >>= 8; } return b; };
+const sha256 = async d => new Uint8Array(await crypto.subtle.digest('SHA-256', d));
+const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+const hex = b => Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+
+// Unwrap a tag-24 (embedded CBOR) value → { bytes, value }.
+function tag24(v) {
+  const bytes = v instanceof CBOR.Tag ? v.value : v;
+  return { bytes, value: decodeCbor(bytes) };
+}
+const mget = (m, k) => (m instanceof Map ? m.get(k) : m?.[k]);
+
+/* --------------------------------------------------------- reader identity */
+
+let readerKey = null;
+async function loadReader() {
+  const box = $('signer');
+  if (!window.READER) {
+    box.innerHTML = '<span class="pill warn">⚠ Cerere nesemnată</span> fără readerAuth EVO nu afișează „Solicitant”.';
+    return;
+  }
+  try {
+    readerKey = await crypto.subtle.importKey('pkcs8', fromB64(READER.pkcs8), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+    box.innerHTML = `<span class="pill ok">✓ Cerere semnată</span> Solicitant: <b>${esc(READER.name || 'EVO Verifier Test')}</b>`;
+  } catch (e) {
+    box.innerHTML = `<span class="pill err">Cheia cititorului nu a putut fi încărcată</span> ${esc(e.message)}`;
+  }
+}
+
+/* --------------------------------------------------- ISO 18013-7 Annex C */
+
+async function buildEncryptionInfo() {
+  const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+  const coseKey = new Map([[1, 2], [-1, 1], [-2, raw.slice(1, 33)], [-3, raw.slice(33, 65)]]);
+  const params = new Map([['nonce', crypto.getRandomValues(new Uint8Array(16))], ['recipientPublicKey', coseKey]]);
+  return { b64: b64url(cbor.encode(['dcapi', params])), privateKey: kp.privateKey, pubRaw: raw };
+}
+
+async function sessionTranscript(encryptionInfoB64) {
+  const dcapiInfo = cbor.encode([encryptionInfoB64, location.origin]);
+  return [null, null, ['dcapi', await sha256(dcapiInfo)]];
+}
+
+// COSE_Sign1 with detached payload: [protected, {33: x5chain}, null, signature]
+async function readerAuth(transcript, itemsRequestBytes) {
+  const ra = cbor.encode(['ReaderAuthentication', transcript, new CBOR.Tag(itemsRequestBytes, 24)]);
+  const raBytes = cbor.encode(new CBOR.Tag(ra, 24));
+  const protectedBytes = cbor.encode(new Map([[1, -7]]));
+  const sigStructure = cbor.encode(['Signature1', protectedBytes, new Uint8Array(0), raBytes]);
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, readerKey, sigStructure));
+  return [protectedBytes, new Map([[33, fromB64(READER.cert)]]), null, sig];
+}
+
+async function buildDeviceRequest(doc, transcript) {
+  const itemsRequest = new Map([
+    ['docType', doc.docType],
+    ['nameSpaces', new Map([[doc.ns, new Map(doc.fields.map(f => [f, false]))]])],
+  ]);
+  const itemsRequestBytes = cbor.encode(itemsRequest);
+  const docRequest = new Map([['itemsRequest', new CBOR.Tag(itemsRequestBytes, 24)]]);
+  if (readerKey) docRequest.set('readerAuth', await readerAuth(transcript, itemsRequestBytes));
+  return b64url(cbor.encode(new Map([['version', '1.0'], ['docRequests', [docRequest]]])));
+}
+
+/* HPKE (RFC 9180) base mode, DHKEM(P-256, HKDF-SHA256) / HKDF-SHA256 / AES-128-GCM. */
+async function hmac(key, data) {
+  const k = await crypto.subtle.importKey('raw', key.length ? key : new Uint8Array(32), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, data));
+}
+const extract = (salt, ikm) => hmac(salt, ikm);
+async function expand(prk, info, len) {
+  let t = new Uint8Array(0), out = new Uint8Array(0);
+  for (let i = 1; out.length < len; i++) { t = await hmac(prk, concat(t, info, Uint8Array.of(i))); out = concat(out, t); }
+  return out.slice(0, len);
+}
+const V1 = te.encode('HPKE-v1');
+const labeledExtract = (suite, salt, label, ikm) => extract(salt, concat(V1, suite, te.encode(label), ikm));
+const labeledExpand = (suite, prk, label, info, len) => expand(prk, concat(i2osp(len, 2), V1, suite, te.encode(label), info), len);
+
+async function hpkeOpen(enc, cipherText, skR, pkRraw, info) {
+  const kemSuite = concat(te.encode('KEM'), i2osp(0x0010, 2));
+  const suite = concat(te.encode('HPKE'), i2osp(0x0010, 2), i2osp(0x0001, 2), i2osp(0x0001, 2));
+  const pkE = await crypto.subtle.importKey('raw', enc, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const dh = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: pkE }, skR, 256));
+  const eaePrk = await labeledExtract(kemSuite, new Uint8Array(0), 'eae_prk', dh);
+  const shared = await labeledExpand(kemSuite, eaePrk, 'shared_secret', concat(enc, pkRraw), 32);
+  const pskIdHash = await labeledExtract(suite, new Uint8Array(0), 'psk_id_hash', new Uint8Array(0));
+  const infoHash = await labeledExtract(suite, new Uint8Array(0), 'info_hash', info);
+  const ctx = concat(Uint8Array.of(0), pskIdHash, infoHash);
+  const secret = await labeledExtract(suite, shared, 'secret', new Uint8Array(0));
+  const key = await labeledExpand(suite, secret, 'key', ctx, 16);
+  const nonce = await labeledExpand(suite, secret, 'base_nonce', ctx, 12);
+  const aes = await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt']);
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: new Uint8Array(0) }, aes, cipherText));
+}
+
+/* ------------------------------------------------ minimal X.509 / ASN.1 */
+
+function asn1(bytes, pos = 0) {
+  const tag = bytes[pos]; let len = bytes[pos + 1], hdr = 2;
+  if (len & 0x80) { const n = len & 0x7f; len = 0; for (let i = 0; i < n; i++) len = len * 256 + bytes[pos + 2 + i]; hdr += n; }
+  return { tag, start: pos, hdr, len, end: pos + hdr + len, body: bytes.subarray(pos + hdr, pos + hdr + len) };
+}
+function children(bytes, node) {
+  const out = []; let p = node.start + node.hdr;
+  while (p < node.end) { const c = asn1(bytes, p); out.push(c); p = c.end; }
+  return out;
+}
+const OIDS = { '2.5.4.3': 'CN', '2.5.4.10': 'O', '2.5.4.6': 'C', '2.5.4.11': 'OU', '2.5.4.7': 'L', '2.5.4.8': 'ST' };
+function oid(b) {
+  const parts = [Math.floor(b[0] / 40), b[0] % 40]; let v = 0;
+  for (let i = 1; i < b.length; i++) { v = v * 128 + (b[i] & 0x7f); if (!(b[i] & 0x80)) { parts.push(v); v = 0; } }
+  return parts.join('.');
+}
+function dn(bytes, node) {
+  return children(bytes, node).map(set => {
+    const atv = children(bytes, children(bytes, set)[0]);
+    const k = oid(atv[0].body);
+    return `${OIDS[k] || k}=${new TextDecoder().decode(atv[1].body)}`;
+  }).join(', ');
+}
+function parseCert(der) {
+  const cert = asn1(der), tbs = children(der, cert)[0], f = children(der, tbs);
+  const i = f[0].tag === 0xa0 ? 1 : 0; // skip [0] version
+  return {
+    issuer: dn(der, f[i + 2]),
+    subject: dn(der, f[i + 4]),
+    spki: der.slice(f[i + 5].start, f[i + 5].end),
+  };
+}
+
+/* ------------------------------------------------------- issuer checks */
+
+async function verifyIssuer(doc) {
+  const issuerSigned = mget(doc, 'issuerSigned');
+  const ia = mget(issuerSigned, 'issuerAuth'); // COSE_Sign1
+  const [prot, unprot, payload, sig] = ia;
+  const x5 = mget(unprot, 33);
+  const leaf = Array.isArray(x5) ? x5[0] : x5;
+  const cert = parseCert(leaf);
+  const pub = await crypto.subtle.importKey('spki', cert.spki, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+  const sigStructure = cbor.encode(['Signature1', prot, new Uint8Array(0), payload]);
+  const sigOk = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pub, sig, sigStructure);
+
+  const mso = tag24(decodeCbor(payload)).value;
+  const digests = mget(mso, 'valueDigests');
+  const validity = mget(mso, 'validityInfo');
+  let total = 0, good = 0;
+  const nameSpaces = mget(issuerSigned, 'nameSpaces');
+  for (const [ns, items] of nameSpaces) {
+    for (const it of items) {
+      const { bytes, value } = tag24(it);
+      const expected = mget(mget(digests, ns), mget(value, 'digestID'));
+      const actual = await sha256(cbor.encode(new CBOR.Tag(bytes, 24)));
+      total++; if (expected && eq(new Uint8Array(expected), actual)) good++;
+    }
+  }
+  const asDate = v => (v instanceof Date ? v : new Date(v instanceof CBOR.Tag ? v.value : v));
+  return {
+    sigOk, digestsOk: total > 0 && good === total, good, total, cert,
+    validFrom: asDate(mget(validity, 'validFrom')), validUntil: asDate(mget(validity, 'validUntil')),
+    docType: mget(mso, 'docType'),
+  };
+}
+
+/* -------------------------------------------------------------- render */
+
+function setStatus(kind, title, text) {
+  $('statusCard').classList.remove('hidden');
+  const icon = kind === 'busy' ? '<div class="spin"></div>' : kind === 'ok' ? '✓' : '✕';
+  $('status').innerHTML = `<div class="status ${kind}"><div class="big">${icon}</div><div><h3>${esc(title)}</h3><p>${esc(text || '')}</p></div></div>`;
+}
+
+function fmtValue(key, v) {
+  if (v instanceof CBOR.Tag) v = v.value;
+  if (v instanceof Date) return v.toLocaleDateString('ro-MD');
+  if (typeof v === 'boolean') return v ? 'Da' : 'Nu';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(v + 'T00:00:00').toLocaleDateString('ro-MD');
+  if (key === 'sex') return { 1: 'Masculin', 2: 'Feminin', M: 'Masculin', F: 'Feminin' }[v] ?? v;
+  if (key === 'driving_privileges' && Array.isArray(v)) {
+    return v.map(p => mget(p, 'vehicle_category_code')).filter(Boolean).join(', ') || '—';
+  }
+  if (v instanceof Uint8Array) return `${v.length} octeți`;
+  if (v instanceof Map) return JSON.stringify(Object.fromEntries(v));
+  if (Array.isArray(v)) return v.map(x => fmtValue('', x)).join(', ');
+  return String(v);
+}
+
+function portraitUrl(bytes) {
+  const type = bytes[0] === 0x89 ? 'image/png' : 'image/jpeg';
+  return URL.createObjectURL(new Blob([bytes], { type }));
+}
+
+function renderDocument(doc, check) {
+  const docType = mget(doc, 'docType');
+  const values = {};
+  for (const [, items] of mget(mget(doc, 'issuerSigned'), 'nameSpaces')) {
+    for (const it of items) { const v = tag24(it).value; values[mget(v, 'elementIdentifier')] = mget(v, 'elementValue'); }
+  }
+  const name = [values.given_name, values.family_name].filter(Boolean).join(' ')
+    || values.owner_name || values.plate_number || DOC_TITLES[docType] || docType;
+  const photo = values.portrait instanceof Uint8Array
+    ? `<img src="${portraitUrl(values.portrait)}" alt="Fotografie">` : `<div class="ph">${values.plate_number ? '🚗' : '👤'}</div>`;
+  const badges = [];
+  if (values.age_over_18 !== undefined) badges.push(values.age_over_18 ? '🔞 Peste 18 ani' : 'Sub 18 ani');
+  if (check?.sigOk && check?.digestsOk) badges.push('✓ Emitent verificat');
+
+  const skip = new Set(['portrait', 'given_name', 'family_name']);
+  const rows = Object.entries(values).filter(([k]) => !skip.has(k)).map(([k, v]) =>
+    `<div class="row"><span class="k">${esc(LABELS[k] || k.replace(/_/g, ' '))}</span><span class="v${k === 'idnp' || k === 'vin' ? ' mono' : ''}">${esc(fmtValue(k, v))}</span></div>`).join('');
+
+  const checkRow = (ok, text) => `<div class="check"><span class="pill ${ok ? 'ok' : 'err'}">${ok ? '✓' : '✕'}</span>${esc(text)}</div>`;
+  const now = new Date();
+  const tech = check ? `
+    <div class="checks">
+      ${checkRow(check.sigOk, 'Semnătura emitentului (issuerAuth) este validă')}
+      ${checkRow(check.digestsOk, `Datele corespund semnăturii (${check.good}/${check.total} câmpuri)`)}
+      ${checkRow(now >= check.validFrom && now <= check.validUntil, `MSO valid ${check.validFrom.toLocaleDateString('ro-MD')} – ${check.validUntil.toLocaleDateString('ro-MD')}`)}
+    </div>
+    <div class="row"><span class="k">Certificat emitent</span><span class="v mono">${esc(check.cert.subject)}</span></div>
+    <div class="row"><span class="k">Emis de</span><span class="v mono">${esc(check.cert.issuer)}</span></div>
+    <p class="sub" style="margin:8px 0 0">Rădăcina de încredere a emitentului (IACA) nu este verificată în această pagină de test.</p>`
+    : '<p class="sub">Verificarea emitentului nu a fost posibilă.</p>';
+
+  return `
+  <article class="idcard">
+    <div class="idhead">${photo}
+      <div><div class="t">${esc(DOC_TITLES[docType] || docType)}</div><div class="n">${esc(name)}</div>
+      <div class="badges">${badges.map(b => `<span class="pill">${esc(b)}</span>`).join('')}</div></div>
+    </div>
+    <div class="rows">${rows || '<p class="sub">Nu au fost partajate alte câmpuri.</p>'}
+      <details><summary>Detalii tehnice</summary>
+        <div class="row"><span class="k">docType</span><span class="v mono">${esc(docType)}</span></div>${tech}
+      </details>
+    </div>
+  </article>`;
+}
+
+/* ---------------------------------------------------------------- flow */
+
+const STATUS_TEXT = { 10: 'eroare generală (status 10)', 11: 'eroare de decodare CBOR (status 11)', 12: 'eroare de validare CBOR (status 12)' };
+
+async function run(doc, btn) {
+  document.querySelectorAll('.doc').forEach(b => (b.disabled = true));
+  $('result').innerHTML = '';
+  setStatus('busy', `Se solicită: ${doc.title}`, 'Confirmă partajarea în EVO Wallet pe telefon…');
+  try {
+    const ei = await buildEncryptionInfo();
+    const transcript = await sessionTranscript(ei.b64);
+    const deviceRequest = await buildDeviceRequest(doc, transcript);
+    const cred = await navigator.credentials.get({
+      mediation: 'required',
+      digital: { requests: [{ protocol: 'org-iso-mdoc', data: { deviceRequest, encryptionInfo: ei.b64 } }] },
+    });
+
+    setStatus('busy', 'Se verifică răspunsul…', 'Decriptare și verificarea semnăturii emitentului');
+    let data = cred.data; if (typeof data === 'string') data = JSON.parse(data);
+    const encrypted = decodeCbor(fromB64(data.response)); // ["dcapi", {enc, cipherText}]
+    const plain = await hpkeOpen(new Uint8Array(mget(encrypted[1], 'enc')), new Uint8Array(mget(encrypted[1], 'cipherText')),
+      ei.privateKey, ei.pubRaw, cbor.encode(transcript));
+    const deviceResponse = decodeCbor(plain);
+    const docs = mget(deviceResponse, 'documents') || [];
+    const status = mget(deviceResponse, 'status');
+
+    if (!docs.length) {
+      setStatus('err', 'Niciun document primit', `Wallet-ul a răspuns fără documente: ${STATUS_TEXT[status] || `status ${status}`}.`);
+    } else {
+      const checks = await Promise.all(docs.map(d => verifyIssuer(d).catch(e => (console.warn(e), null))));
+      const allOk = checks.every(c => c?.sigOk && c?.digestsOk);
+      setStatus(allOk ? 'ok' : 'err', allOk ? 'Document verificat' : 'Verificare eșuată',
+        allOk ? 'Semnătura emitentului și integritatea datelor sunt valide.' : 'Semnătura emitentului sau integritatea datelor nu a putut fi confirmată.');
+      $('result').innerHTML = docs.map((d, i) => renderDocument(d, checks[i])).join('') +
+        `<section class="card"><details><summary>Răspuns brut (DeviceResponse, ${plain.length} octeți)</summary><pre>${esc(hex(plain))}</pre></details></section>`;
+    }
+  } catch (e) {
+    const msg = e.name === 'NotAllowedError' ? 'Cererea a fost anulată sau refuzată.' :
+      e.name === 'TypeError' && !('DigitalCredential' in window) ? 'Browserul nu suportă Digital Credentials API (folosește Chrome pe Android).' :
+      `${e.name}: ${e.message}`;
+    setStatus('err', 'Nu s-a putut obține documentul', msg);
+  } finally {
+    document.querySelectorAll('.doc').forEach(b => (b.disabled = false));
+  }
+}
+
+$('docs').innerHTML = DOCS.map(d =>
+  `<button class="doc" data-id="${d.id}"><span class="ic">${d.icon}</span><span><b>${esc(d.title)}</b><span>${esc(d.hint)}</span></span></button>`).join('');
+document.querySelectorAll('.doc').forEach(b => (b.onclick = () => run(DOCS.find(d => d.id === b.dataset.id), b)));
+loadReader();
+</script>
+</body>
+</html>
